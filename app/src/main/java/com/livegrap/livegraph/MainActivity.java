@@ -9,6 +9,9 @@ import com.livegrap.livegraph.modal.PulseMeasurement;
 import com.livegrap.livegraph.modal.PulseMeasurements;
 import com.livegrap.livegraph.view.LiveGraphView;
 
+import org.joda.time.DateTime;
+import org.joda.time.format.DateTimeFormat;
+
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Calendar;
@@ -21,27 +24,32 @@ public class MainActivity extends AppCompatActivity {
     private ActivityMainBinding binding;
     double random;
 
+    DateTime fakeNow = DateTime.parse("01/01/2019 10:00:20",
+            DateTimeFormat.forPattern("dd/MM/yyyy HH:mm:ss"));
+
+    int fakeDateCounter = 2;
 //
-//    private Runnable updateRunnable = new Runnable() {
-//        @Override
-//        public void run() {
+    private Runnable updateRunnable = new Runnable() {
+        @Override
+        public void run() {
+
+            PulseMeasurement pulseMeasurement  = new PulseMeasurement(fakeNow.plusSeconds(fakeDateCounter),70);
+            binding.graph.appendMeasurementValue(pulseMeasurement);
+            fakeDateCounter += 2;
+
 //            random = Math.random();
 //            Date date = Calendar.getInstance().getTime();
 //
 ////            binding.graph.appendValue(new LiveGraphView.GraphValuePulseMeasurement();
-//            binding.graph.postDelayed(updateRunnable, (long) (1500 + 1000 * Math.random()));
+            binding.graph.postDelayed(updateRunnable, (long) (1500 + 1000 * Math.random()));
 //            binding.currentValue.setText(String.format("Current value: %s", random * 2000));
-//        }
-//    };
+        }
+    };
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-
-
-
         binding = DataBindingUtil.setContentView(this, R.layout.activity_main);
-
 
         Date date = Calendar.getInstance().getTime();
         binding.graph.setDataWindowWidth(40000);
@@ -65,6 +73,8 @@ public class MainActivity extends AppCompatActivity {
         final List<PulseMeasurement> pulseMeasurements = PulseMeasurements.createPulseMeasurements();
 
         binding.graph.appendMeasurementValues((ArrayList<PulseMeasurement>) pulseMeasurements);
+
+
 //        for (int i = 0; i < pulseMeasurements.size(); i++) {
 //            binding.graph.appendMeasurementValue(pulseMeasurements.get(i));
 //        }
@@ -74,13 +84,13 @@ public class MainActivity extends AppCompatActivity {
     @Override
     public void onResume() {
         super.onResume();
-//        binding.graph.postDelayed(updateRunnable, 2000);
+        binding.graph.postDelayed(updateRunnable, 2000);
     }
 
     @Override
     protected void onPause() {
         super.onPause();
-//        binding.graph.removeCallbacks(updateRunnable);
+        binding.graph.removeCallbacks(updateRunnable);
     }
 
 

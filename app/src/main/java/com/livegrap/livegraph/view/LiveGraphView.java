@@ -41,6 +41,33 @@ public class LiveGraphView extends FrameLayout {
     private ArrayList<GraphValue> data;
 
     private ArrayList<PulseMeasurement> pulseData = new ArrayList<>();
+    private ArrayList<PulseMeasurement> visiblePulseMeasurements = new ArrayList<>();
+    private ArrayList<GraphValue> visiblePulseMeasurementsAsGraphValues = new ArrayList<>();
+    private double startYMin;
+    private double startYMax;
+
+    public double getCurrentYMin() {
+        return currentYMin;
+    }
+
+    public void setCurrentYMin(float currentYMin) {
+        this.currentYMin = currentYMin;
+        invalidate();
+    }
+
+    public double getCurrentYMax() {
+        return currentYMax;
+    }
+
+    public void setCurrentYMax(float currentYMax) {
+        this.currentYMax = currentYMax;
+        invalidate();
+    }
+
+    private float currentYMin;
+    private float currentYMax;
+    private double endYMin;
+    private double endYMax;
 
     private Paint linePaint;
     private Paint gradientPaint;
@@ -55,6 +82,7 @@ public class LiveGraphView extends FrameLayout {
     private ObjectAnimator dataMaxYAnimator;
     private float dataMaxY = 0;
     private ObjectAnimator animatedXOffsetAnimator;
+    private ObjectAnimator animatedYMaxOffsetAnimator;
     private float animatedXOffset = 0;
     private AnimatorSet mainMarkerBlurColorAnimator;
     private int mainMarkerBlurColor = 0xffffff77;
@@ -176,6 +204,7 @@ public class LiveGraphView extends FrameLayout {
     @Keep
     public void setAnimatedXOffset(float animatedXOffset) {
         this.animatedXOffset = animatedXOffset;
+        Log.d("ANIMATED", "setAnimatedXOffset: " + animatedXOffset);
         invalidate();
     }
 
@@ -270,6 +299,7 @@ public class LiveGraphView extends FrameLayout {
 
     public void appendMeasurementValues(ArrayList<PulseMeasurement> pulseMeasurements) {
         this.pulseData = pulseMeasurements;
+        newPulseHasArrived();
 
         //able to determine x,y
         //list of x,y
@@ -277,14 +307,14 @@ public class LiveGraphView extends FrameLayout {
 
     }
 
-    private void drawGraph(ArrayList<GraphValue> values) {
+    private void drawGraph() {
         float cornerRadiusOffset = 20;
 
         graphPath.rewind();
         gradientPath.rewind();
 
-        for (int i = 0; i < values.size(); i++) {
-            GraphValue current = values.get(i);
+        for (int i = 0; i < visiblePulseMeasurementsAsGraphValues.size(); i++) {
+            GraphValue current = visiblePulseMeasurementsAsGraphValues.get(i);
             float x = (float) current.x;
             float y = (float) current.y;
             if (i == 0) {
@@ -297,18 +327,19 @@ public class LiveGraphView extends FrameLayout {
             Log.d("TAG WHEN NOW == 1", "drawGraph: " + "x: " + x + " y: " + y);
         }
 
-        if (values.size() > 1) {
+        if (visiblePulseMeasurementsAsGraphValues.size() > 1) {
             // finish straight right to avoid ugly line
             gradientPath.lineTo(getWidth() + cornerRadiusOffset, getHeight() + cornerRadiusOffset); //lower right
             gradientPath.lineTo(0 - cornerRadiusOffset, getHeight() + cornerRadiusOffset); //lower left
-            gradientPath.lineTo(0 - cornerRadiusOffset, (float) values.get(0).y); //upper left
+            gradientPath.lineTo(0 - cornerRadiusOffset, (float) visiblePulseMeasurementsAsGraphValues.get(0).y); //upper left
             gradientPath.close();
         }
     }
 
     public void appendMeasurementValue(PulseMeasurement pulseMeasurement) {
-        float diffBetweenLatestAndPrevious = pointsPerPixel;
+//        float diffBetweenLatestAndPrevious = pointsPerPixel;
         this.pulseData.add(pulseMeasurement);
+        newPulseHasArrived();
 
 //        double latestPower = pulseMeasurement.pulseMeasurement.getPower();
 
@@ -327,65 +358,95 @@ public class LiveGraphView extends FrameLayout {
 //            dataMaxYAnimator.setInterpolator(new DecelerateInterpolator(2));
 //            dataMaxYAnimator.start();
 //        }
-        if (animatedXOffsetAnimator != null) {
-            animatedXOffsetAnimator.pause();
-        }
-        animatedXOffset += diffBetweenLatestAndPrevious;
-        animatedXOffsetAnimator = ObjectAnimator.ofFloat(
-                this, "animatedXOffset", 0);
-        animatedXOffsetAnimator.setDuration(1500);
-        animatedXOffsetAnimator.setInterpolator(new DecelerateInterpolator(2));
-        animatedXOffsetAnimator.start();
-        if (mainMarkerScaleAnimator != null) {
-            mainMarkerScaleAnimator.cancel();
-        }
-        mainMarkerScaleAnimator = new AnimatorSet();
-        ObjectAnimator mainMarkerScaleUpAnimator = ObjectAnimator.ofFloat(
-                this, "mainMarkerScale", 2f);
-        mainMarkerScaleUpAnimator.setInterpolator(new AccelerateInterpolator(2f));
-        mainMarkerScaleUpAnimator.setDuration(75);
-        ObjectAnimator mainMarkerScaleDownAnimator = ObjectAnimator.ofFloat(
-                this, "mainMarkerScale", 1f);
-        mainMarkerScaleDownAnimator.setInterpolator(new DecelerateInterpolator(1.5f));
-        mainMarkerScaleDownAnimator.setDuration(1100);
-        mainMarkerScaleAnimator.playSequentially(
-                mainMarkerScaleUpAnimator,
-                mainMarkerScaleDownAnimator
-        );
-        mainMarkerScaleAnimator.start();
-        if (mainMarkerBlurColorAnimator != null) {
-            mainMarkerBlurColorAnimator.pause();
-        }
-        mainMarkerBlurColorAnimator = new AnimatorSet();
-        ObjectAnimator mainMarkerBlurColorUpAnimator = ObjectAnimator.ofInt(
-                this, "mainMarkerBlurColor", mainMarkerBlurColor, 0xFFFF0000);
-        mainMarkerBlurColorUpAnimator.setEvaluator(new ArgbEvaluator());
-        mainMarkerBlurColorUpAnimator.setInterpolator(new AccelerateInterpolator(2f));
-        mainMarkerBlurColorUpAnimator.setDuration(75);
-        ObjectAnimator mainMarkerBlurColorDownAnimator = ObjectAnimator.ofInt(
-                this, "mainMarkerBlurColor", 0xFFFF0000, mainMarkerBlurColor);
-        mainMarkerBlurColorDownAnimator.setEvaluator(new ArgbEvaluator());
-        mainMarkerBlurColorDownAnimator.setInterpolator(new DecelerateInterpolator(1.5f));
-        mainMarkerBlurColorDownAnimator.setDuration(1100);
-        mainMarkerBlurColorAnimator.playSequentially(
-                mainMarkerBlurColorUpAnimator,
-                mainMarkerBlurColorDownAnimator
-        );
-        mainMarkerBlurColorAnimator.start();
+//        if (animatedXOffsetAnimator != null) {
+//            animatedXOffsetAnimator.pause();
+//        }
+//        animatedXOffset += 10;
+//        animatedXOffsetAnimator = ObjectAnimator.ofFloat(
+//                this, "animatedXOffset", 0);
+//        animatedXOffsetAnimator.setDuration(1500);
+//        animatedXOffsetAnimator.setInterpolator(new DecelerateInterpolator(2));
+//        animatedXOffsetAnimator.start();
+//        if (mainMarkerScaleAnimator != null) {
+//            mainMarkerScaleAnimator.cancel();
+//        }
+//        mainMarkerScaleAnimator = new AnimatorSet();
+//        ObjectAnimator mainMarkerScaleUpAnimator = ObjectAnimator.ofFloat(
+//                this, "mainMarkerScale", 2f);
+//        mainMarkerScaleUpAnimator.setInterpolator(new AccelerateInterpolator(2f));
+//        mainMarkerScaleUpAnimator.setDuration(75);
+//        ObjectAnimator mainMarkerScaleDownAnimator = ObjectAnimator.ofFloat(
+//                this, "mainMarkerScale", 1f);
+//        mainMarkerScaleDownAnimator.setInterpolator(new DecelerateInterpolator(1.5f));
+//        mainMarkerScaleDownAnimator.setDuration(1100);
+//        mainMarkerScaleAnimator.playSequentially(
+//                mainMarkerScaleUpAnimator,
+//                mainMarkerScaleDownAnimator
+//        );
+//        mainMarkerScaleAnimator.start();
+//        if (mainMarkerBlurColorAnimator != null) {
+//            mainMarkerBlurColorAnimator.pause();
+//        }
+//        mainMarkerBlurColorAnimator = new AnimatorSet();
+//        ObjectAnimator mainMarkerBlurColorUpAnimator = ObjectAnimator.ofInt(
+//                this, "mainMarkerBlurColor", mainMarkerBlurColor, 0xFFFF0000);
+//        mainMarkerBlurColorUpAnimator.setEvaluator(new ArgbEvaluator());
+//        mainMarkerBlurColorUpAnimator.setInterpolator(new AccelerateInterpolator(2f));
+//        mainMarkerBlurColorUpAnimator.setDuration(75);
+//        ObjectAnimator mainMarkerBlurColorDownAnimator = ObjectAnimator.ofInt(
+//                this, "mainMarkerBlurColor", 0xFFFF0000, mainMarkerBlurColor);
+//        mainMarkerBlurColorDownAnimator.setEvaluator(new ArgbEvaluator());
+//        mainMarkerBlurColorDownAnimator.setInterpolator(new DecelerateInterpolator(1.5f));
+//        mainMarkerBlurColorDownAnimator.setDuration(1100);
+//        mainMarkerBlurColorAnimator.playSequentially(
+//                mainMarkerBlurColorUpAnimator,
+//                mainMarkerBlurColorDownAnimator
+//        );
+//        mainMarkerBlurColorAnimator.start();
         invalidate();
     }
 
-    private ArrayList<PulseMeasurement> findVisibleMeasurements(ArrayList<PulseMeasurement> allMeasurements) {
+    private void newPulseHasArrived() {
+        calculatedVisibleMeasurements();
 
-        ArrayList<PulseMeasurement> visiblePulseMeasurements = new ArrayList<>();
+        if (animatedXOffsetAnimator != null) {
+            animatedXOffsetAnimator.pause();
+        }
+        animatedXOffset = 10;
+        animatedXOffsetAnimator = ObjectAnimator.ofFloat(
+                this, "currentYMin", 0);
+
+        animatedXOffsetAnimator.setDuration(1500);
+        animatedXOffsetAnimator.setInterpolator(new DecelerateInterpolator(2));
+        animatedXOffsetAnimator.start();
+
+
+        if (animatedYMaxOffsetAnimator != null) {
+            animatedYMaxOffsetAnimator.pause();
+        }
+        //animatedXOffset += 10;
+        animatedYMaxOffsetAnimator = ObjectAnimator.ofFloat(
+                this, "currentYMax", 0);
+        animatedYMaxOffsetAnimator.setDuration(1500);
+        animatedYMaxOffsetAnimator.setInterpolator(new DecelerateInterpolator(2));
+        animatedYMaxOffsetAnimator.start();
+    }
+
+
+    private void calculatedVisibleMeasurements() {
+
+        //VISIBABLE VALUES
+
+        visiblePulseMeasurements.clear();
+
         PulseMeasurement justToEarly = null;
 
-        if (allMeasurements.size() > 1) {
-            DateTime toTimestamp = allMeasurements.get(allMeasurements.size() - 1).getTimestamp();
+        if (this.pulseData.size() > 1) {
+            DateTime toTimestamp = this.pulseData.get(this.pulseData.size() - 1).getTimestamp();
             DateTime fromTimestamp = toTimestamp.minusSeconds(getWidth() / widthPerSecond);
 
-            for (int i = 0; i < allMeasurements.size(); i++) {
-                PulseMeasurement current = allMeasurements.get(i);
+            for (int i = 0; i < this.pulseData.size(); i++) {
+                PulseMeasurement current = this.pulseData.get(i);
                 if (current.getTimestamp().isAfter(fromTimestamp) || current.getTimestamp().isEqual(fromTimestamp)) {
                     visiblePulseMeasurements.add(current);
                 }
@@ -397,52 +458,54 @@ public class LiveGraphView extends FrameLayout {
                 visiblePulseMeasurements.add(0, justToEarly);
             }
         }
-        return visiblePulseMeasurements;
+
+        //FINDING BEST Y-MIN/Y-MAX FOR THE VISIBLE VALUES
+
+        startYMin = endYMin;
+        startYMax = endYMax;
+
+        if (visiblePulseMeasurements.size() > 1) {
+            for (int i = 0; i < visiblePulseMeasurements.size(); i++) {
+                PulseMeasurement current = visiblePulseMeasurements.get(i);
+                if (current.getPower() < endYMin) {
+                    endYMin = current.getPower();
+                }
+                if (current.getPower() > endYMax) {
+                    endYMax = current.getPower();
+                }
+            }
+
+            if (endYMin == endYMax) {
+                endYMin = endYMin - 10;
+                endYMax = endYMax + 10;
+            }
+        }
     }
 
-    private ArrayList<GraphValue> calculateGraphValuesForMeasurements(ArrayList<PulseMeasurement> measurements) {
+    private void calculateGraphValuesForMeasurements() {
 
-        ArrayList<GraphValue> graphValues = new ArrayList<>();
+        visiblePulseMeasurementsAsGraphValues.clear();
 
-        if (measurements.size() == 0) {
-            return graphValues;
-        }
+        if (visiblePulseMeasurements.size() > 0) {
+            DateTime toTimestamp = visiblePulseMeasurements.get(visiblePulseMeasurements.size() - 1).getTimestamp();
 
-        DateTime toTimestamp = measurements.get(measurements.size() - 1).getTimestamp();
-        double yMin = 10000000;
-        double yMax = -10000000;
+            for (int i = 0; i < visiblePulseMeasurements.size(); i++) {
+                PulseMeasurement current = visiblePulseMeasurements.get(i);
 
-
-        for (int i = 0; i < measurements.size(); i++) {
-            PulseMeasurement current = measurements.get(i);
-            if (current.getPower() < yMin) {
-                yMin = current.getPower();
-            }
-            if (current.getPower() > yMax) {
-                yMax = current.getPower();
+                double seconds = (toTimestamp.getMillis() - current.getTimestamp().getMillis()) / 1000;
+                double x = getWidth() - (seconds * this.widthPerSecond);
+                double y = getHeight() - getHeight() * ((current.getPower() - currentYMin) / (currentYMax - currentYMin));
+                visiblePulseMeasurementsAsGraphValues.add(new GraphValue(x, y));
             }
         }
-
-        for (int i = 0; i < measurements.size(); i++) {
-            PulseMeasurement current = measurements.get(i);
-
-            double seconds = (toTimestamp.getMillis() - current.getTimestamp().getMillis()) / 1000;
-            double x = getWidth() - (seconds * this.widthPerSecond);
-            double y = getHeight() - getHeight() * ((current.getPower() - yMin) / (yMax - yMin));
-            graphValues.add(new GraphValue(x, y));
-        }
-
-        return graphValues;
     }
 
     @Override
     protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
 
-        ArrayList<PulseMeasurement> visibleMeasurements = findVisibleMeasurements(this.pulseData);
-        ArrayList<GraphValue> visibleMeasurementsAsGraphValues = calculateGraphValuesForMeasurements(visibleMeasurements);
-
-        drawGraph(visibleMeasurementsAsGraphValues);
+        calculateGraphValuesForMeasurements();
+        drawGraph();
 
 
 //        int height = getHeight();
