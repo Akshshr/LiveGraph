@@ -28,7 +28,6 @@ import android.widget.ScrollView;
 
 import com.livegrap.livegraph.R;
 import com.livegrap.livegraph.modal.PulseMeasurement;
-import com.livegrap.livegraph.util.MathUtil;
 import com.livegrap.livegraph.util.Util;
 
 import org.joda.time.DateTime;
@@ -42,7 +41,6 @@ public class LiveGraphView extends FrameLayout {
     private ArrayList<GraphValue> data;
 
     private ArrayList<PulseMeasurement> pulseData = new ArrayList<>();
-    ArrayList<PulseMeasurement> visiblePulseMeasurements = new ArrayList<>();
 
     private Paint linePaint;
     private Paint gradientPaint;
@@ -65,6 +63,7 @@ public class LiveGraphView extends FrameLayout {
     private final int padding = 50;
 
     private int pointsPerPixel;
+    private int widthPerSecond = 100;
 
     public LiveGraphView(@NonNull Context context) {
         super(context);
@@ -281,24 +280,28 @@ public class LiveGraphView extends FrameLayout {
     private void drawGraph(ArrayList<GraphValue> values) {
         float cornerRadiusOffset = 20;
 
+        graphPath.rewind();
+        gradientPath.rewind();
+
         for (int i = 0; i < values.size(); i++) {
             GraphValue current = values.get(i);
+            float x = (float) current.x;
+            float y = (float) current.y;
             if (i == 0) {
-                graphPath.moveTo((float) current.x, (float) current.y);
-                gradientPath.moveTo((float) current.x - cornerRadiusOffset, (float) current.y);
-                Log.d("TAG", "drawGraph: " + "x: " + (float) current.x + " y: " + (float) current.y);
+                graphPath.moveTo(x, y);
+                gradientPath.moveTo(x, y);
             } else {
-                graphPath.lineTo((float) current.x, (float) current.y);
-                gradientPath.lineTo((float) current.x, (float) current.y);
-                Log.d("TAG WHEN NOW == 1", "drawGraph: " + "x: " + (float) current.x + " y: " + (float) current.y);
+                graphPath.lineTo(x, y);
+                gradientPath.lineTo(x, y);
             }
+            Log.d("TAG WHEN NOW == 1", "drawGraph: " + "x: " + x + " y: " + y);
         }
 
         if (values.size() > 1) {
             // finish straight right to avoid ugly line
-
-            gradientPath.lineTo(getWidth() + cornerRadiusOffset, getHeight() + cornerRadiusOffset);
-            gradientPath.lineTo(0 - cornerRadiusOffset, getHeight() + cornerRadiusOffset);
+            gradientPath.lineTo(getWidth() + cornerRadiusOffset, getHeight() + cornerRadiusOffset); //lower right
+            gradientPath.lineTo(0 - cornerRadiusOffset, getHeight() + cornerRadiusOffset); //lower left
+            gradientPath.lineTo(0 - cornerRadiusOffset, (float) values.get(0).y); //upper left
             gradientPath.close();
         }
     }
@@ -372,23 +375,17 @@ public class LiveGraphView extends FrameLayout {
         invalidate();
     }
 
-    @Override
-    protected void onDraw(Canvas canvas) {
-        super.onDraw(canvas);
-        graphPath.rewind();
+    private ArrayList<PulseMeasurement> findVisibleMeasurements(ArrayList<PulseMeasurement> allMeasurements) {
 
-        ArrayList<GraphValue> visibleGraphValues = new ArrayList<>();
+        ArrayList<PulseMeasurement> visiblePulseMeasurements = new ArrayList<>();
         PulseMeasurement justToEarly = null;
 
-        if (pulseData.size() > 1) {
-            DateTime toTimestamp = pulseData.get(pulseData.size() - 1).getTimestamp();
-            DateTime fromTimestamp = toTimestamp.minusSeconds(getWidth() / pointsPerPixel);
+        if (allMeasurements.size() > 1) {
+            DateTime toTimestamp = allMeasurements.get(allMeasurements.size() - 1).getTimestamp();
+            DateTime fromTimestamp = toTimestamp.minusSeconds(getWidth() / widthPerSecond);
 
-            double yMin = 10000000;
-            double yMax = -10000000;
-
-            for (int i = 0; i < pulseData.size(); i++) {
-                PulseMeasurement current = pulseData.get(i);
+            for (int i = 0; i < allMeasurements.size(); i++) {
+                PulseMeasurement current = allMeasurements.get(i);
                 if (current.getTimestamp().isAfter(fromTimestamp) || current.getTimestamp().isEqual(fromTimestamp)) {
                     visiblePulseMeasurements.add(current);
                 }
@@ -399,38 +396,53 @@ public class LiveGraphView extends FrameLayout {
             if (justToEarly != null) {
                 visiblePulseMeasurements.add(0, justToEarly);
             }
+        }
+        return visiblePulseMeasurements;
+    }
 
-            for (int i = 0; i < visiblePulseMeasurements.size(); i++) {
-                PulseMeasurement current = visiblePulseMeasurements.get(i);
-                if (current.getPower() < yMin) {
-                    yMin = current.getPower();
-                }
-                if (current.getPower() > yMax) {
-                    yMax = current.getPower();
-                }
+    private ArrayList<GraphValue> calculateGraphValuesForMeasurements(ArrayList<PulseMeasurement> measurements) {
+
+        ArrayList<GraphValue> graphValues = new ArrayList<>();
+
+        if (measurements.size() == 0) {
+            return graphValues;
+        }
+
+        DateTime toTimestamp = measurements.get(measurements.size() - 1).getTimestamp();
+        double yMin = 10000000;
+        double yMax = -10000000;
+
+
+        for (int i = 0; i < measurements.size(); i++) {
+            PulseMeasurement current = measurements.get(i);
+            if (current.getPower() < yMin) {
+                yMin = current.getPower();
             }
-
-            for (int i = 0; i < visiblePulseMeasurements.size(); i++) {
-                PulseMeasurement current = visiblePulseMeasurements.get(i);
-
-                double seconds = (toTimestamp.getMillis() - current.getTimestamp().getMillis()) / 1000;
-                double x = getWidth() - (seconds * this.pointsPerPixel);
-
-                double difference = yMax - yMin;
-                double factor = getHeight() / difference;
-                double relativeHeight = current.getPower() - yMin;
-                double y = MathUtil.clamp((float) (factor / relativeHeight), 0, getHeight());
-
-
-                if (Double.isInfinite(y)) {
-                    Log.d("TAG INFINITE", "drawGraph: ");
-                }
-                visibleGraphValues.add(new GraphValue(x, y));
+            if (current.getPower() > yMax) {
+                yMax = current.getPower();
             }
         }
 
-        //Drawing the graph
-        drawGraph(visibleGraphValues);
+        for (int i = 0; i < measurements.size(); i++) {
+            PulseMeasurement current = measurements.get(i);
+
+            double seconds = (toTimestamp.getMillis() - current.getTimestamp().getMillis()) / 1000;
+            double x = getWidth() - (seconds * this.widthPerSecond);
+            double y = getHeight() - getHeight() * ((current.getPower() - yMin) / (yMax - yMin));
+            graphValues.add(new GraphValue(x, y));
+        }
+
+        return graphValues;
+    }
+
+    @Override
+    protected void onDraw(Canvas canvas) {
+        super.onDraw(canvas);
+
+        ArrayList<PulseMeasurement> visibleMeasurements = findVisibleMeasurements(this.pulseData);
+        ArrayList<GraphValue> visibleMeasurementsAsGraphValues = calculateGraphValuesForMeasurements(visibleMeasurements);
+
+        drawGraph(visibleMeasurementsAsGraphValues);
 
 
 //        int height = getHeight();

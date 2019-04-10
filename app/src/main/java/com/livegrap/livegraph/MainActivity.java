@@ -64,7 +64,6 @@ public class MainActivity extends AppCompatActivity {
 
         final List<PulseMeasurement> pulseMeasurements = PulseMeasurements.createPulseMeasurements();
 
-        Collections.reverse(pulseMeasurements);
         binding.graph.appendMeasurementValues((ArrayList<PulseMeasurement>) pulseMeasurements);
 //        for (int i = 0; i < pulseMeasurements.size(); i++) {
 //            binding.graph.appendMeasurementValue(pulseMeasurements.get(i));
