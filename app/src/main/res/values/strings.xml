@@ -1,0 +1,6 @@
+<resources>
+    <string name="app_name">LiveGraph</string>
+
+    <string name="fontFamilyBrownRegular" translatable="false">googlesans_regular</string>
+
+</resources>

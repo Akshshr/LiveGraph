@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <dimen name="fontSize8">8sp</dimen> <!-- WARNING! Only too be used in icons -->
+
+</resources>
