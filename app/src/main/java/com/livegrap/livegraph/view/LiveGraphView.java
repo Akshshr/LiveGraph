@@ -13,6 +13,7 @@ import android.graphics.LinearGradient;
 import android.graphics.Paint;
 import android.graphics.Path;
 import android.graphics.Shader;
+import android.graphics.drawable.shapes.OvalShape;
 import android.support.annotation.Keep;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
@@ -52,7 +53,11 @@ public class LiveGraphView extends FrameLayout {
 
     private Paint linePaint;
     private Paint gradientPaint;
-    private Paint mainMarkerPaint;
+
+    private Paint markerPaint;
+    private Paint markerPulsePaint;
+
+
     private Paint mainMarkerBlurPaint;
     private Paint xAxisLinePaint;
 
@@ -138,14 +143,16 @@ public class LiveGraphView extends FrameLayout {
         linePaint.setStrokeCap(Paint.Cap.ROUND);
         gradientPaint = new Paint(linePaint);
         gradientPaint.setStyle(Paint.Style.FILL);
-        mainMarkerPaint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.DITHER_FLAG);
-        mainMarkerPaint.setStyle(Paint.Style.FILL);
-        mainMarkerPaint.setColor(Color.WHITE);
-        mainMarkerBlurPaint = new Paint(mainMarkerPaint);
-        mainMarkerBlurPaint.setMaskFilter(new BlurMaskFilter(
-                Util.dpToPx(8, getContext()), BlurMaskFilter.Blur.NORMAL));
-        mainMarkerBlurPaint.setColor(mainMarkerBlurColor);
-        mainMarkerBlurPaint.setAlpha(100);
+
+        markerPaint= new Paint(Paint.ANTI_ALIAS_FLAG | Paint.DITHER_FLAG);
+        markerPaint.setStyle(Paint.Style.FILL);
+        markerPaint.setColor(Color.WHITE);
+
+//        mainMarkerBlurPaint = new Paint(mainMarkerPaint);
+//        mainMarkerBlurPaint.setMaskFilter(new BlurMaskFilter(
+//                Util.dpToPx(8, getContext()), BlurMaskFilter.Blur.NORMAL));
+//        mainMarkerBlurPaint.setColor(mainMarkerBlurColor);
+//        mainMarkerBlurPaint.setAlpha(100);
     }
 
     @Override
@@ -175,23 +182,21 @@ public class LiveGraphView extends FrameLayout {
 
         for (int i = 0; i < visiblePulseMeasurementsAsGraphValues.size(); i++) {
             GraphValue current = visiblePulseMeasurementsAsGraphValues.get(i);
-            float x = (float) current.x;
-            float y = (float) current.y;
             if (i == 0) {
-                graphPath.moveTo(x, y);
-                gradientPath.moveTo(x, y);
+                graphPath.moveTo(current.x, current.y);
+                gradientPath.moveTo(current.x, current.y);
             } else {
-                graphPath.lineTo(x, y);
-                gradientPath.lineTo(x, y);
+                graphPath.lineTo(current.x, current.y);
+                gradientPath.lineTo(current.x, current.y);
             }
-            Log.d("TAG WHEN NOW == 1", "drawGraph: " + "x: " + x + " y: " + y);
+            Log.d("TAG WHEN NOW == 1", "drawGraph: " + "x: " + current.x + " y: " + current.y);
         }
 
         if (visiblePulseMeasurementsAsGraphValues.size() > 1) {
             // finish straight right to avoid ugly line
             gradientPath.lineTo(getWidth() + cornerRadiusOffset, getHeight() + cornerRadiusOffset); //lower right
             gradientPath.lineTo(0 - cornerRadiusOffset, getHeight() + cornerRadiusOffset); //lower left
-            gradientPath.lineTo(0 - cornerRadiusOffset, (float) visiblePulseMeasurementsAsGraphValues.get(0).y); //upper left
+            gradientPath.lineTo(0 - cornerRadiusOffset, visiblePulseMeasurementsAsGraphValues.get(0).y); //upper left
             gradientPath.close();
         }
     }
@@ -230,6 +235,7 @@ public class LiveGraphView extends FrameLayout {
         timeOffsetAnimator.setInterpolator(new DecelerateInterpolator(2));
         timeOffsetAnimator.start();
     }
+
 
 
     private void calculatedVisibleMeasurements() {
@@ -297,8 +303,8 @@ public class LiveGraphView extends FrameLayout {
                 PulseMeasurement current = visiblePulseMeasurements.get(i);
 
                 double seconds = (toTimestamp.getMillis() - current.getTimestamp().getMillis()) / 1000 - currentTimeOffset;
-                double x = getWidth() - (seconds * this.widthPerSecond);
-                double y = getHeight() - getHeight() * ((current.getPower() - currentYMin) / (currentYMax - currentYMin));
+                float x = (float) (getWidth() - (seconds * this.widthPerSecond));
+                float y = (float) (getHeight() - getHeight() * ((current.getPower() - currentYMin) / (currentYMax - currentYMin)));
                 visiblePulseMeasurementsAsGraphValues.add(new GraphValue(x, y));
             }
         }
@@ -311,28 +317,19 @@ public class LiveGraphView extends FrameLayout {
         calculateGraphValuesForMeasurements();
         drawGraph();
 
+        //Draw Marker
 
-//        int height = getHeight();
-//        int width = getWidth();
-//        Log.d("Live graph", "onDraw: ");
-//        GraphValue value;
-//        GraphValue liveValue = data.get(data.size() - 1);
-//        GraphValue previousValue = data.get(data.size() - 2);
-//        graphPath.moveTo(-width * 0.05f, height * 1.05f);
-//
-//        // we draw the basic graph
-//        for(int i = 0; i < data.size(); i++) {
-//            value = data.get(i);
-//            float pathX = getGraphX(liveValue, value.x, width);
-//            float pathY = getGraphY(value.y, height);
-//            graphPath.lineTo(pathX, pathY);
+//        if(visiblePulseMeasurementsAsGraphValues.size()> 0) {
+//            GraphValue latestValue = visiblePulseMeasurementsAsGraphValues.get(visiblePulseMeasurementsAsGraphValues.size()-1);
+//            canvas.drawCircle(latestValue.x, latestValue.y,20,markerPaint);
 //        }
 //
-//        // finish straight right to avoid ugly line
-//        graphPath.lineTo(width * 1.05f, getGraphY(liveValue.y, height));
-//        graphPath.lineTo(width * 1.05f, height * 1.05f);
-//        graphPath.close();
-//
+
+        GraphValue latestValue = visiblePulseMeasurementsAsGraphValues.get(visiblePulseMeasurementsAsGraphValues.size()-1);
+
+        graphPath.addCircle(latestValue.x, latestValue.y,20, Path.Direction.CCW);
+
+
         canvas.save();
 //        canvas.clipRect(0, 0, width+10, height+10);
         canvas.drawPath(gradientPath, gradientPaint);
@@ -353,11 +350,15 @@ public class LiveGraphView extends FrameLayout {
 
     }
 
-    public static class GraphValue {
-        public final double x; // in our specific case, is the millis time slot
-        public final double y; // kwh
+    private void drawMarker() {
 
-        public GraphValue(double x, double y) {
+    }
+
+    public static class GraphValue {
+        public final float x; // in our specific case, is the millis time slot
+        public final float y; // kwh
+
+        public GraphValue(float x, float y) {
             this.x = x;
             this.y = y;
         }
