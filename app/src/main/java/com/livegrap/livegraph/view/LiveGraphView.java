@@ -43,8 +43,6 @@ public class LiveGraphView extends FrameLayout {
     private ArrayList<PulseMeasurement> pulseData = new ArrayList<>();
     private ArrayList<PulseMeasurement> visiblePulseMeasurements = new ArrayList<>();
     private ArrayList<GraphValue> visiblePulseMeasurementsAsGraphValues = new ArrayList<>();
-    private double startYMin;
-    private double startYMax;
 
     public double getCurrentYMin() {
         return currentYMin;
@@ -64,10 +62,22 @@ public class LiveGraphView extends FrameLayout {
         invalidate();
     }
 
+    private float startYMin;
+    private float startYMax;
     private float currentYMin;
     private float currentYMax;
-    private double endYMin;
-    private double endYMax;
+    private float endYMin;
+    private float endYMax;
+
+    private float startTimeOffset;
+    private float currentTimeOffset;
+    public float getCurrentTimeOffset() {
+        return currentTimeOffset;
+    }
+
+    public void setCurrentTimeOffset(float currentTimeOffset) {
+        this.currentTimeOffset = currentTimeOffset;
+    }
 
     private Paint linePaint;
     private Paint gradientPaint;
@@ -81,8 +91,9 @@ public class LiveGraphView extends FrameLayout {
     private int dataWindowWidth;
     private ObjectAnimator dataMaxYAnimator;
     private float dataMaxY = 0;
-    private ObjectAnimator animatedXOffsetAnimator;
-    private ObjectAnimator animatedYMaxOffsetAnimator;
+    private ObjectAnimator yMinAnimator;
+    private ObjectAnimator yMaxAnimator;
+    private ObjectAnimator timeOffsetAnimator;
     private float animatedXOffset = 0;
     private AnimatorSet mainMarkerBlurColorAnimator;
     private int mainMarkerBlurColor = 0xffffff77;
@@ -249,15 +260,15 @@ public class LiveGraphView extends FrameLayout {
             dataMaxYAnimator.setInterpolator(new DecelerateInterpolator(2));
             dataMaxYAnimator.start();
         }
-        if (animatedXOffsetAnimator != null) {
-            animatedXOffsetAnimator.pause();
+        if (yMinAnimator != null) {
+            yMinAnimator.pause();
         }
         animatedXOffset += diffBetweenLatestAndPrevious;
-        animatedXOffsetAnimator = ObjectAnimator.ofFloat(
+        yMinAnimator = ObjectAnimator.ofFloat(
                 this, "animatedXOffset", 0);
-        animatedXOffsetAnimator.setDuration(1500);
-        animatedXOffsetAnimator.setInterpolator(new DecelerateInterpolator(2));
-        animatedXOffsetAnimator.start();
+        yMinAnimator.setDuration(1500);
+        yMinAnimator.setInterpolator(new DecelerateInterpolator(2));
+        yMinAnimator.start();
         if (mainMarkerScaleAnimator != null) {
             mainMarkerScaleAnimator.cancel();
         }
@@ -358,15 +369,15 @@ public class LiveGraphView extends FrameLayout {
 //            dataMaxYAnimator.setInterpolator(new DecelerateInterpolator(2));
 //            dataMaxYAnimator.start();
 //        }
-//        if (animatedXOffsetAnimator != null) {
-//            animatedXOffsetAnimator.pause();
+//        if (yMinAnimator != null) {
+//            yMinAnimator.pause();
 //        }
 //        animatedXOffset += 10;
-//        animatedXOffsetAnimator = ObjectAnimator.ofFloat(
+//        yMinAnimator = ObjectAnimator.ofFloat(
 //                this, "animatedXOffset", 0);
-//        animatedXOffsetAnimator.setDuration(1500);
-//        animatedXOffsetAnimator.setInterpolator(new DecelerateInterpolator(2));
-//        animatedXOffsetAnimator.start();
+//        yMinAnimator.setDuration(1500);
+//        yMinAnimator.setInterpolator(new DecelerateInterpolator(2));
+//        yMinAnimator.start();
 //        if (mainMarkerScaleAnimator != null) {
 //            mainMarkerScaleAnimator.cancel();
 //        }
@@ -409,34 +420,37 @@ public class LiveGraphView extends FrameLayout {
     private void newPulseHasArrived() {
         calculatedVisibleMeasurements();
 
-        if (animatedXOffsetAnimator != null) {
-            animatedXOffsetAnimator.pause();
+
+        if (yMinAnimator != null) {
+            yMinAnimator.pause();
         }
-        animatedXOffset = 10;
-        animatedXOffsetAnimator = ObjectAnimator.ofFloat(
-                this, "currentYMin", 0);
-
-        animatedXOffsetAnimator.setDuration(1500);
-        animatedXOffsetAnimator.setInterpolator(new DecelerateInterpolator(2));
-        animatedXOffsetAnimator.start();
+        yMinAnimator = ObjectAnimator.ofFloat(this, "currentYMin", startYMin, endYMin);
+        yMinAnimator.setDuration(1500);
+        yMinAnimator.setInterpolator(new DecelerateInterpolator(2));
+        yMinAnimator.start();
 
 
-        if (animatedYMaxOffsetAnimator != null) {
-            animatedYMaxOffsetAnimator.pause();
+        if (yMaxAnimator != null) {
+            yMaxAnimator.pause();
         }
-        //animatedXOffset += 10;
-        animatedYMaxOffsetAnimator = ObjectAnimator.ofFloat(
-                this, "currentYMax", 0);
-        animatedYMaxOffsetAnimator.setDuration(1500);
-        animatedYMaxOffsetAnimator.setInterpolator(new DecelerateInterpolator(2));
-        animatedYMaxOffsetAnimator.start();
+        yMaxAnimator = ObjectAnimator.ofFloat(this, "currentYMax", startYMax, endYMax);
+        yMaxAnimator.setDuration(1500);
+        yMaxAnimator.setInterpolator(new DecelerateInterpolator(2));
+        yMaxAnimator.start();
+
+        if (timeOffsetAnimator != null) {
+            timeOffsetAnimator.pause();
+        }
+        timeOffsetAnimator = ObjectAnimator.ofFloat(this, "currentTimeOffset", startTimeOffset, 0);
+        timeOffsetAnimator.setDuration(1500);
+        timeOffsetAnimator.setInterpolator(new DecelerateInterpolator(2));
+        timeOffsetAnimator.start();
     }
 
 
     private void calculatedVisibleMeasurements() {
 
         //VISIBABLE VALUES
-
         visiblePulseMeasurements.clear();
 
         PulseMeasurement justToEarly = null;
@@ -460,7 +474,6 @@ public class LiveGraphView extends FrameLayout {
         }
 
         //FINDING BEST Y-MIN/Y-MAX FOR THE VISIBLE VALUES
-
         startYMin = endYMin;
         startYMax = endYMax;
 
@@ -468,10 +481,10 @@ public class LiveGraphView extends FrameLayout {
             for (int i = 0; i < visiblePulseMeasurements.size(); i++) {
                 PulseMeasurement current = visiblePulseMeasurements.get(i);
                 if (current.getPower() < endYMin) {
-                    endYMin = current.getPower();
+                    endYMin = (float) current.getPower();
                 }
                 if (current.getPower() > endYMax) {
-                    endYMax = current.getPower();
+                    endYMax = (float) current.getPower();
                 }
             }
 
@@ -479,6 +492,13 @@ public class LiveGraphView extends FrameLayout {
                 endYMin = endYMin - 10;
                 endYMax = endYMax + 10;
             }
+        }
+
+        //FINDING THE X-OFFSET
+        if (this.pulseData.size() > 1) {
+            PulseMeasurement latestMeasurementThatIsDrawn = visiblePulseMeasurements.get(visiblePulseMeasurements.size() - 2);
+            PulseMeasurement newMeasurementToDraw = visiblePulseMeasurements.get(visiblePulseMeasurements.size() - 1);
+            startTimeOffset = (newMeasurementToDraw.getTimestamp().getMillis() - latestMeasurementThatIsDrawn.getTimestamp().getMillis()) / 1000;
         }
     }
 
@@ -492,7 +512,7 @@ public class LiveGraphView extends FrameLayout {
             for (int i = 0; i < visiblePulseMeasurements.size(); i++) {
                 PulseMeasurement current = visiblePulseMeasurements.get(i);
 
-                double seconds = (toTimestamp.getMillis() - current.getTimestamp().getMillis()) / 1000;
+                double seconds = (toTimestamp.getMillis() - current.getTimestamp().getMillis()) / 1000 - currentTimeOffset;
                 double x = getWidth() - (seconds * this.widthPerSecond);
                 double y = getHeight() - getHeight() * ((current.getPower() - currentYMin) / (currentYMax - currentYMin));
                 visiblePulseMeasurementsAsGraphValues.add(new GraphValue(x, y));
