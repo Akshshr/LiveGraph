@@ -50,20 +50,7 @@ public class MainActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         binding = DataBindingUtil.setContentView(this, R.layout.activity_main);
-
-        Date date = Calendar.getInstance().getTime();
-        binding.graph.setDataWindowWidth(40000);
-        binding.graph.setData(Arrays.asList(
-                new LiveGraphView.GraphValue(date.getTime() - 5 * 2000, 150),
-                new LiveGraphView.GraphValue(date.getTime() - 4 * 2000, 140),
-                new LiveGraphView.GraphValue(date.getTime() - 3 * 2000, 200),
-                new LiveGraphView.GraphValue(date.getTime() - 2 * 2000, 220),
-                new LiveGraphView.GraphValue(date.getTime() - 2000, 150),
-                new LiveGraphView.GraphValue(date.getTime(), 200)
-        ));
-        for (int i = 0; i < 1000; i++) {
-            new LiveGraphView.GraphValue(date.getTime() - i * 2000, 150);
-        }
+        
     }
 
     @Override

@@ -37,12 +37,36 @@ import java.util.List;
 
 public class LiveGraphView extends FrameLayout {
 
-    private View scrollContentView;
-    private ArrayList<GraphValue> data;
-
     private ArrayList<PulseMeasurement> pulseData = new ArrayList<>();
     private ArrayList<PulseMeasurement> visiblePulseMeasurements = new ArrayList<>();
     private ArrayList<GraphValue> visiblePulseMeasurementsAsGraphValues = new ArrayList<>();
+
+    private float startYMin;
+    private float startYMax;
+    private float currentYMin;
+    private float currentYMax;
+    private float endYMin;
+    private float endYMax;
+    private float startTimeOffset;
+    private float currentTimeOffset;
+
+    private Paint linePaint;
+    private Paint gradientPaint;
+    private Paint mainMarkerPaint;
+    private Paint mainMarkerBlurPaint;
+    private Paint xAxisLinePaint;
+
+    private Path graphPath = new Path();
+    private Path gradientPath = new Path();
+    private float dataMaxY = 0;
+
+    private ObjectAnimator yMinAnimator;
+    private ObjectAnimator yMaxAnimator;
+    private ObjectAnimator timeOffsetAnimator;
+
+    private int mainMarkerBlurColor = 0xffffff77;
+
+    private int widthPerSecond = 100;
 
     public double getCurrentYMin() {
         return currentYMin;
@@ -62,15 +86,6 @@ public class LiveGraphView extends FrameLayout {
         invalidate();
     }
 
-    private float startYMin;
-    private float startYMax;
-    private float currentYMin;
-    private float currentYMax;
-    private float endYMin;
-    private float endYMax;
-
-    private float startTimeOffset;
-    private float currentTimeOffset;
     public float getCurrentTimeOffset() {
         return currentTimeOffset;
     }
@@ -78,31 +93,6 @@ public class LiveGraphView extends FrameLayout {
     public void setCurrentTimeOffset(float currentTimeOffset) {
         this.currentTimeOffset = currentTimeOffset;
     }
-
-    private Paint linePaint;
-    private Paint gradientPaint;
-    private Paint mainMarkerPaint;
-    private Paint mainMarkerBlurPaint;
-    private Paint xAxisLinePaint;
-
-    private ScrollView scrollView;
-    private Path graphPath = new Path();
-    private Path gradientPath = new Path();
-    private int dataWindowWidth;
-    private ObjectAnimator dataMaxYAnimator;
-    private float dataMaxY = 0;
-    private ObjectAnimator yMinAnimator;
-    private ObjectAnimator yMaxAnimator;
-    private ObjectAnimator timeOffsetAnimator;
-    private float animatedXOffset = 0;
-    private AnimatorSet mainMarkerBlurColorAnimator;
-    private int mainMarkerBlurColor = 0xffffff77;
-    private AnimatorSet mainMarkerScaleAnimator;
-    private float mainMarkerScale = 1.0f;
-    private final int padding = 50;
-
-    private int pointsPerPixel;
-    private int widthPerSecond = 100;
 
     public LiveGraphView(@NonNull Context context) {
         super(context);
@@ -128,18 +118,8 @@ public class LiveGraphView extends FrameLayout {
     }
 
     private void init() {
-        pointsPerPixel = getScreenWidth() / 10;
 
         setWillNotDraw(false);
-        scrollView = new ScrollView(getContext());
-        addView(scrollView, new FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.MATCH_PARENT));
-        scrollContentView = new View(getContext());
-        scrollView.addView(scrollContentView, new ScrollView.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.MATCH_PARENT));
-        this.data = new ArrayList<>();
 
         xAxisLinePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
         xAxisLinePaint.setTextAlign(Paint.Align.CENTER);
@@ -171,142 +151,11 @@ public class LiveGraphView extends FrameLayout {
     @Override
     protected void onSizeChanged(int w, int h, int oldw, int oldh) {
         super.onSizeChanged(w, h, oldw, oldh);
-        scrollContentView.setLayoutParams(new ScrollView.LayoutParams(
-                w * 10,
-                ViewGroup.LayoutParams.MATCH_PARENT));
+
         gradientPaint.setShader(new LinearGradient(0, getHeight(), 0, 0,
                 Color.TRANSPARENT, 0x77ffff77, Shader.TileMode.MIRROR));
     }
 
-    public void setDataWindowWidth(int dataWindowWidth) {
-        this.dataWindowWidth = dataWindowWidth;
-        invalidate();
-    }
-
-    /**
-     * Supposed to be called on init / first data
-     *
-     * @param data
-     */
-    public void setData(List<GraphValue> data) {
-        this.data.addAll(data);
-        for (int i = 0; i < data.size(); i++) {
-            dataMaxY = (float) Math.max(data.get(i).y, dataMaxY);
-        }
-        invalidate();
-    }
-
-    @Keep
-    public float getDataMaxY() {
-        return dataMaxY;
-    }
-
-    @Keep
-    public void setDataMaxY(float dataMaxY) {
-        this.dataMaxY = dataMaxY;
-        invalidate();
-    }
-
-    @Keep
-    public float getAnimatedXOffset() {
-        return animatedXOffset;
-    }
-
-    @Keep
-    public void setAnimatedXOffset(float animatedXOffset) {
-        this.animatedXOffset = animatedXOffset;
-        Log.d("ANIMATED", "setAnimatedXOffset: " + animatedXOffset);
-        invalidate();
-    }
-
-    @Keep
-    public float getMainMarkerScale() {
-        return mainMarkerScale;
-    }
-
-    @Keep
-    public void setMainMarkerScale(float mainMarkerScale) {
-        this.mainMarkerScale = mainMarkerScale;
-        invalidate();
-    }
-
-    @Keep
-    public int getMainMarkerBlurColor() {
-        return mainMarkerBlurColor;
-    }
-
-    @Keep
-    public void setMainMarkerBlurColor(int mainMarkerBlurColor) {
-        this.mainMarkerBlurColor = mainMarkerBlurColor;
-        mainMarkerBlurPaint.setColor(mainMarkerBlurColor);
-        mainMarkerBlurPaint.setAlpha(100);
-        invalidate();
-    }
-
-    public void appendValue(GraphValue value) {
-        float diffBetweenLatestAndPrevious = (float) (value.x - data.get(data.size() - 1).x);
-        this.data.add(value);
-        if (this.data.size() > 16) {
-            this.data.remove(0);
-        }
-        if (value.y > dataMaxY) {
-            if (dataMaxYAnimator != null) {
-                dataMaxYAnimator.cancel();
-            }
-            dataMaxYAnimator = ObjectAnimator.ofFloat(
-                    this, "dataMaxY", (float) value.y);
-
-            dataMaxYAnimator.setDuration(1500);
-            dataMaxYAnimator.setInterpolator(new DecelerateInterpolator(2));
-            dataMaxYAnimator.start();
-        }
-        if (yMinAnimator != null) {
-            yMinAnimator.pause();
-        }
-        animatedXOffset += diffBetweenLatestAndPrevious;
-        yMinAnimator = ObjectAnimator.ofFloat(
-                this, "animatedXOffset", 0);
-        yMinAnimator.setDuration(1500);
-        yMinAnimator.setInterpolator(new DecelerateInterpolator(2));
-        yMinAnimator.start();
-        if (mainMarkerScaleAnimator != null) {
-            mainMarkerScaleAnimator.cancel();
-        }
-        mainMarkerScaleAnimator = new AnimatorSet();
-        ObjectAnimator mainMarkerScaleUpAnimator = ObjectAnimator.ofFloat(
-                this, "mainMarkerScale", 2f);
-        mainMarkerScaleUpAnimator.setInterpolator(new AccelerateInterpolator(2f));
-        mainMarkerScaleUpAnimator.setDuration(75);
-        ObjectAnimator mainMarkerScaleDownAnimator = ObjectAnimator.ofFloat(
-                this, "mainMarkerScale", 1f);
-        mainMarkerScaleDownAnimator.setInterpolator(new DecelerateInterpolator(1.5f));
-        mainMarkerScaleDownAnimator.setDuration(1100);
-        mainMarkerScaleAnimator.playSequentially(
-                mainMarkerScaleUpAnimator,
-                mainMarkerScaleDownAnimator
-        );
-        mainMarkerScaleAnimator.start();
-        if (mainMarkerBlurColorAnimator != null) {
-            mainMarkerBlurColorAnimator.pause();
-        }
-        mainMarkerBlurColorAnimator = new AnimatorSet();
-        ObjectAnimator mainMarkerBlurColorUpAnimator = ObjectAnimator.ofInt(
-                this, "mainMarkerBlurColor", mainMarkerBlurColor, 0xFFFF0000);
-        mainMarkerBlurColorUpAnimator.setEvaluator(new ArgbEvaluator());
-        mainMarkerBlurColorUpAnimator.setInterpolator(new AccelerateInterpolator(2f));
-        mainMarkerBlurColorUpAnimator.setDuration(75);
-        ObjectAnimator mainMarkerBlurColorDownAnimator = ObjectAnimator.ofInt(
-                this, "mainMarkerBlurColor", 0xFFFF0000, mainMarkerBlurColor);
-        mainMarkerBlurColorDownAnimator.setEvaluator(new ArgbEvaluator());
-        mainMarkerBlurColorDownAnimator.setInterpolator(new DecelerateInterpolator(1.5f));
-        mainMarkerBlurColorDownAnimator.setDuration(1100);
-        mainMarkerBlurColorAnimator.playSequentially(
-                mainMarkerBlurColorUpAnimator,
-                mainMarkerBlurColorDownAnimator
-        );
-        mainMarkerBlurColorAnimator.start();
-        invalidate();
-    }
 
     public void appendMeasurementValues(ArrayList<PulseMeasurement> pulseMeasurements) {
         this.pulseData = pulseMeasurements;
@@ -348,73 +197,8 @@ public class LiveGraphView extends FrameLayout {
     }
 
     public void appendMeasurementValue(PulseMeasurement pulseMeasurement) {
-//        float diffBetweenLatestAndPrevious = pointsPerPixel;
         this.pulseData.add(pulseMeasurement);
         newPulseHasArrived();
-
-//        double latestPower = pulseMeasurement.pulseMeasurement.getPower();
-
-
-//        if(this.pulseData.size() > 16) {
-//            this.pulseData.remove(0);
-//        }
-//        if(pulseMeasurement.y > dataMaxY) {
-//            if(dataMaxYAnimator != null) {
-//                dataMaxYAnimator.cancel();
-//            }
-//            dataMaxYAnimator = ObjectAnimator.ofFloat(
-//                    this, "dataMaxY", (float) pulseMeasurement.y);
-//
-//            dataMaxYAnimator.setDuration(1500);
-//            dataMaxYAnimator.setInterpolator(new DecelerateInterpolator(2));
-//            dataMaxYAnimator.start();
-//        }
-//        if (yMinAnimator != null) {
-//            yMinAnimator.pause();
-//        }
-//        animatedXOffset += 10;
-//        yMinAnimator = ObjectAnimator.ofFloat(
-//                this, "animatedXOffset", 0);
-//        yMinAnimator.setDuration(1500);
-//        yMinAnimator.setInterpolator(new DecelerateInterpolator(2));
-//        yMinAnimator.start();
-//        if (mainMarkerScaleAnimator != null) {
-//            mainMarkerScaleAnimator.cancel();
-//        }
-//        mainMarkerScaleAnimator = new AnimatorSet();
-//        ObjectAnimator mainMarkerScaleUpAnimator = ObjectAnimator.ofFloat(
-//                this, "mainMarkerScale", 2f);
-//        mainMarkerScaleUpAnimator.setInterpolator(new AccelerateInterpolator(2f));
-//        mainMarkerScaleUpAnimator.setDuration(75);
-//        ObjectAnimator mainMarkerScaleDownAnimator = ObjectAnimator.ofFloat(
-//                this, "mainMarkerScale", 1f);
-//        mainMarkerScaleDownAnimator.setInterpolator(new DecelerateInterpolator(1.5f));
-//        mainMarkerScaleDownAnimator.setDuration(1100);
-//        mainMarkerScaleAnimator.playSequentially(
-//                mainMarkerScaleUpAnimator,
-//                mainMarkerScaleDownAnimator
-//        );
-//        mainMarkerScaleAnimator.start();
-//        if (mainMarkerBlurColorAnimator != null) {
-//            mainMarkerBlurColorAnimator.pause();
-//        }
-//        mainMarkerBlurColorAnimator = new AnimatorSet();
-//        ObjectAnimator mainMarkerBlurColorUpAnimator = ObjectAnimator.ofInt(
-//                this, "mainMarkerBlurColor", mainMarkerBlurColor, 0xFFFF0000);
-//        mainMarkerBlurColorUpAnimator.setEvaluator(new ArgbEvaluator());
-//        mainMarkerBlurColorUpAnimator.setInterpolator(new AccelerateInterpolator(2f));
-//        mainMarkerBlurColorUpAnimator.setDuration(75);
-//        ObjectAnimator mainMarkerBlurColorDownAnimator = ObjectAnimator.ofInt(
-//                this, "mainMarkerBlurColor", 0xFFFF0000, mainMarkerBlurColor);
-//        mainMarkerBlurColorDownAnimator.setEvaluator(new ArgbEvaluator());
-//        mainMarkerBlurColorDownAnimator.setInterpolator(new DecelerateInterpolator(1.5f));
-//        mainMarkerBlurColorDownAnimator.setDuration(1100);
-//        mainMarkerBlurColorAnimator.playSequentially(
-//                mainMarkerBlurColorUpAnimator,
-//                mainMarkerBlurColorDownAnimator
-//        );
-//        mainMarkerBlurColorAnimator.start();
-        invalidate();
     }
 
     private void newPulseHasArrived() {
@@ -567,16 +351,6 @@ public class LiveGraphView extends FrameLayout {
 //        canvas.drawCircle(
 //                mainMarkerX, mainMarkerY, mainMarkerRadius, mainMarkerPaint);
 
-    }
-
-    private float getGraphX(GraphValue liveValue, double currentValueX, int viewWidth) {
-        return (float) (viewWidth - // start at end of graph
-                (liveValue.x - currentValueX) / dataWindowWidth * viewWidth + // move to left based on time in value
-                (animatedXOffset / dataWindowWidth + 0.0025f) * viewWidth);
-    }
-
-    private float getGraphY(double currentValueY, int viewHeight) {
-        return viewHeight - (float) (currentValueY / dataMaxY * viewHeight);
     }
 
     public static class GraphValue {
